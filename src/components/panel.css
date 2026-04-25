@@ -1,0 +1,66 @@
+.panel {
+  margin: 1.5rem 0;
+  padding: 1.5rem;
+  border: 1px solid #333;
+  border-radius: 8px;
+  background: #1a1a1a;
+}
+
+.panel h2 {
+  margin-top: 0;
+  font-size: 1.25rem;
+}
+
+.panel-controls {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.panel-controls button {
+  padding: 0.5rem 1rem;
+  font-size: 1rem;
+  cursor: pointer;
+  border-radius: 6px;
+  border: 1px solid #646cff;
+  background: #646cff;
+  color: white;
+}
+
+.panel-controls button:hover:not(:disabled) {
+  background: #535bf2;
+  border-color: #535bf2;
+}
+
+.panel-controls button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.panel-status {
+  margin: 0.75rem 0 0;
+  color: #888;
+  font-size: 0.9rem;
+}
+
+.panel-error {
+  margin: 0.75rem 0 0;
+  color: #f88;
+  font-size: 0.9rem;
+}
+
+.panel audio {
+  display: none;
+}
+
+.panel-controls button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  /* keep your existing styles */
+}
+
+.panel-controls button svg {
+  flex-shrink: 0;
+}
