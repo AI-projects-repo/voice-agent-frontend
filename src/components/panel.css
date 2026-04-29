@@ -1,9 +1,17 @@
 .panel {
-  margin: 1.5rem 0;
+  box-sizing: border-box;
+  margin: 1.5rem auto;
   padding: 1.5rem;
   border: 1px solid #333;
   border-radius: 8px;
-  background: #1a1a1a;
+  background: hsl(0, 0%, 10%);
+  width: 50%;
+}
+
+.panel:has(textarea) {
+  min-height: min(40vh, 900px);
+  display: flex;
+  flex-direction: column;
 }
 
 .panel h2 {
@@ -63,4 +71,17 @@
 
 .panel-controls button svg {
   flex-shrink: 0;
+}
+
+.panel > div:has(textarea) {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  margin-top: 0.75rem;
+}
+
+textarea {
+  resize: none;
+  width: 100%;
+  min-height: 8rem;
 }
