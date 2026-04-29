@@ -4,32 +4,10 @@ import { Play, Square } from 'lucide-react';
 
 const OFFER_URL = 'http://localhost:8080/offer';
 
-/** Sent on the negotiated `chatbot` data channel when the user stops sending audio. */
 const STOP_SIGNAL_JSON = JSON.stringify({
   type: 'signal',
   action: 'stop_audio',
 });
-
-function attachChatbotDataChannel(
-  dc: RTCDataChannel,
-  pendingStopSignalRef: { current: boolean },
-  dcRef: { current: RTCDataChannel | null },
-) {
-  dcRef.current = dc;
-  dc.onopen = () => {
-    if (pendingStopSignalRef.current) {
-      pendingStopSignalRef.current = false;
-      try {
-        dc.send(STOP_SIGNAL_JSON);
-      } catch {
-        /* ignore */
-      }
-    }
-  };
-  dc.onclose = () => {
-    if (dcRef.current === dc) dcRef.current = null;
-  };
-}
 
 function Panel() {
   const [status, setStatus] = useState('Stopped.');
@@ -41,8 +19,36 @@ function Panel() {
   const streamRef = useRef<MediaStream | null>(null);
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const dcRef = useRef<RTCDataChannel | null>(null);
-  /** If Stop runs before the chatbot channel exists or reaches "open", send then. */
   const pendingStopSignalRef = useRef(false);
+  const [chatbotMessage, setChatbotMessage] = useState('');
+
+
+  function attachDataChannel(
+    dc: RTCDataChannel,
+    pendingStopSignalRef: { current: boolean },
+    dcRef: { current: RTCDataChannel | null },
+  ) {
+    dcRef.current = dc;
+    dc.onopen = () => {
+      // check if there is a pending stop signal
+      if (pendingStopSignalRef.current) {
+        pendingStopSignalRef.current = false;
+        try {
+          dc.send(STOP_SIGNAL_JSON);
+        } catch {
+          console.log("Error sending stop signal");
+        }
+      }
+    };
+    dc.onmessage = (event) => {
+      console.log('Message from chatbot:', event.data);
+      const chatbotmetadata = JSON.parse(event.data as string);
+      setChatbotMessage(chatbotmetadata.message);
+    };
+    dc.onclose = () => {
+      if (dcRef.current === dc) dcRef.current = null;
+    };
+  }
 
   function cleanup() {
     dcRef.current = null;
@@ -83,10 +89,9 @@ function Panel() {
       pcRef.current = pc;
       pc.addTrack(stream.getAudioTracks()[0], stream);
 
-      // Offerer must create the DataChannel so SCTP is in the offer. On the server,
-      // remove pc.createDataChannel("chatbot") and use pc.on("datachannel", ...) instead.
+      // data channel for chatbot 
       const dc = pc.createDataChannel('chatbot', { ordered: true });
-      attachChatbotDataChannel(dc, pendingStopSignalRef, dcRef);
+      attachDataChannel(dc, pendingStopSignalRef, dcRef);
 
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
@@ -131,7 +136,7 @@ function Panel() {
       try {
         dc.send(STOP_SIGNAL_JSON);
       } catch {
-        /* ignore send errors */
+        console.log('Error sending stop signal');
       }
     } else {
       pendingStopSignalRef.current = true;
@@ -158,6 +163,11 @@ function Panel() {
       </div>
       <p className="panel-status">{status}</p>
       {error && <p className="panel-error">{error}</p>}
+      { chatbotMessage && (
+        <div>
+          <textarea id="chatbot-message" disabled value={chatbotMessage} readOnly /> 
+        </div>
+      )}
     </div>
   );
 }
