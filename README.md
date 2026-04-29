@@ -1,73 +1,89 @@
-# React + TypeScript + Vite
+# Audio Agent (WebRTC Frontend)
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Frontend app for streaming microphone audio to a backend over WebRTC and receiving chatbot messages through a data channel.
 
-Currently, two official plugins are available:
+- App version: `0.0.0` (from `package.json`)
+- Stack: React 19 + TypeScript + Vite 7
+- UI: single panel with `Start` / `Stop` controls
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+## What it does
 
-## React Compiler
+- Creates a WebRTC peer connection from the browser.
+- Captures microphone audio with `getUserMedia`.
+- Sends SDP offer to backend signaling endpoint: `POST http://localhost:8080/offer`.
+- Applies SDP answer returned by backend.
+- Opens a WebRTC data channel (`chatbot`) to receive text messages.
+- Supports soft stop: mutes microphone and sends a `stop_audio` signal while keeping the session open.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Message contract
 
-## Expanding the ESLint configuration
+### Stop signal sent to backend
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```json
+{
+  "type": "signal",
+  "action": "stop_audio"
+}
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+### Chatbot message expected from backend
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+The UI expects data channel messages to be JSON with a `message` field:
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```json
+{
+  "message": "Your assistant response text"
+}
 ```
+
+## Run locally
+
+### Prerequisites
+
+- Node.js 20+
+- npm 10+
+- A backend server running on `http://localhost:8080` implementing `POST /offer`
+
+### Install
+
+```bash
+npm install
+```
+
+### Start development server
+
+```bash
+npm run dev
+```
+
+Then open the local URL shown by Vite (usually `http://localhost:5173`).
+
+### Build for production
+
+```bash
+npm run build
+```
+
+### Preview production build
+
+```bash
+npm run preview
+```
+
+### Lint
+
+```bash
+npm run lint
+```
+
+## Project structure
+
+- `src/components/panel.tsx`: WebRTC/session logic and UI actions.
+- `src/components/panel.css`: panel and control styling.
+- `src/App.tsx`: app root rendering the panel.
+
+## Notes and limitations
+
+- The signaling endpoint URL is currently hardcoded in `panel.tsx`.
+- Microphone permission is required in the browser.
+- Data channel messages are parsed as JSON without schema validation.
