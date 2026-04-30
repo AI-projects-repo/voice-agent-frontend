@@ -11,7 +11,6 @@ const STOP_SIGNAL_JSON = JSON.stringify({
 
 function Panel() {
   const [status, setStatus] = useState('Stopped.');
-  const [error, setError] = useState<string | null>(null);
   /** Negotiated WebRTC session (PC + mic stream). */
   const [isSession, setIsSession] = useState(false);
   /** Audio track is enabled and RTP is being sent. */
@@ -20,7 +19,29 @@ function Panel() {
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const dcRef = useRef<RTCDataChannel | null>(null);
   const pendingStopSignalRef = useRef(false);
-  const [chatbotMessage, setChatbotMessage] = useState('');
+  const [agentMessage, setAgentMessage] = useState('');
+
+  function handleOpenDataChannelInterruption(dc: RTCDataChannel, pendingStopSignalRef: { current: boolean }) {
+    // check if there is a pending stop signal
+    if (pendingStopSignalRef.current) {
+      pendingStopSignalRef.current = false;
+      try {
+        dc.send(STOP_SIGNAL_JSON);
+      } catch(error) {
+        console.log("Error sending stop signal", error);
+      }
+    }
+  }
+
+  function handleMessageFromAgent(event: MessageEvent) {
+    console.log('Message from agent:', event.data);
+    try{
+      const agentmetadata = JSON.parse(event.data as string);
+      setAgentMessage(agentmetadata.message);
+    } catch(error) {
+      console.log("Error parsing message from agent", error);
+    }
+  }
 
 
   function attachDataChannel(
@@ -29,22 +50,8 @@ function Panel() {
     dcRef: { current: RTCDataChannel | null },
   ) {
     dcRef.current = dc;
-    dc.onopen = () => {
-      // check if there is a pending stop signal
-      if (pendingStopSignalRef.current) {
-        pendingStopSignalRef.current = false;
-        try {
-          dc.send(STOP_SIGNAL_JSON);
-        } catch {
-          console.log("Error sending stop signal");
-        }
-      }
-    };
-    dc.onmessage = (event) => {
-      console.log('Message from chatbot:', event.data);
-      const chatbotmetadata = JSON.parse(event.data as string);
-      setChatbotMessage(chatbotmetadata.message);
-    };
+    dc.onopen = () => handleOpenDataChannelInterruption(dc, pendingStopSignalRef);
+    dc.onmessage = (event) => handleMessageFromAgent(event);
     dc.onclose = () => {
       if (dcRef.current === dc) dcRef.current = null;
     };
@@ -65,32 +72,38 @@ function Panel() {
     setIsSendingAudio(false);
   }
 
-  async function handleStart() {
-    setError(null);
-    try {
-      if (pcRef.current && streamRef.current) {
-        for (const t of streamRef.current.getAudioTracks()) {
-          t.enabled = true;
-        }
-        setIsSendingAudio(true);
-        setStatus('Recording… Audio is being sent to the server.');
-        return;
+  async function getStream(){
+    setStatus('Getting microphone…');
+    // if the stream is already open, return it
+    if (pcRef.current && streamRef.current) {
+      for (const t of streamRef.current.getAudioTracks()) {
+        t.enabled = true;
       }
+      setIsSendingAudio(true);
+      setStatus('Recording… Audio is being sent to the server.');
+      return streamRef.current;
+    }
+    // if the stream is not open, get it from the microphone
+    const stream = await navigator.mediaDevices.getUserMedia({
+      audio: true,
+      video: false,
+    });
+    streamRef.current = stream;
+    return stream;
+  }
 
-      setStatus('Getting microphone…');
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: true,
-        video: false,
-      });
-      streamRef.current = stream;
+  async function handleStart() {
+    try {
+
+      const stream = await getStream();
 
       setStatus('Creating offer…');
       const pc = new RTCPeerConnection();
       pcRef.current = pc;
       pc.addTrack(stream.getAudioTracks()[0], stream);
 
-      // data channel for chatbot 
-      const dc = pc.createDataChannel('chatbot', { ordered: true });
+      // data channel for voice agent 
+      const dc = pc.createDataChannel('voice-agent', { ordered: true });
       attachDataChannel(dc, pendingStopSignalRef, dcRef);
 
       const offer = await pc.createOffer();
@@ -118,13 +131,11 @@ function Panel() {
       setStatus('Recording… Audio is being sent to the server.');
     } catch (err) {
       setStatus('Stopped.');
-      setError(err instanceof Error ? err.message : 'Failed to start');
       cleanup();
     }
   }
 
   function handleStop() {
-    setError(null);
     const stream = streamRef.current;
     if (stream) {
       for (const t of stream.getAudioTracks()) {
@@ -162,10 +173,9 @@ function Panel() {
         </button>
       </div>
       <p className="panel-status">{status}</p>
-      {error && <p className="panel-error">{error}</p>}
-      { chatbotMessage && (
+      { agentMessage && (
         <div>
-          <textarea id="chatbot-message" disabled value={chatbotMessage} readOnly /> 
+          <textarea id="agent-message" disabled value={agentMessage} readOnly /> 
         </div>
       )}
     </div>
