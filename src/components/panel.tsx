@@ -37,7 +37,11 @@ function Panel() {
     console.log('Message from agent:', event.data);
     try{
       const agentmetadata = JSON.parse(event.data as string);
-      setAgentMessage(agentmetadata.message);
+      if (agentmetadata.first_chunk){
+        setAgentMessage(agentmetadata.message);
+      } else {
+        setAgentMessage((prev) => prev + agentmetadata.message);
+      }
     } catch(error) {
       console.log("Error parsing message from agent", error);
     }
