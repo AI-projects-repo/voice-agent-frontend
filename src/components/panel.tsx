@@ -20,6 +20,45 @@ function Panel() {
   const dcRef = useRef<RTCDataChannel | null>(null);
   const pendingStopSignalRef = useRef(false);
   const [agentMessage, setAgentMessage] = useState('');
+  const sampleRate = useRef<number | null>(null);
+  const channels = useRef<number | null>(null);
+  const sampleWidth = useRef<number | null>(null);
+  const audioChunksRef = useRef<Uint8Array[]>([]);
+  const audioContextRef = useRef<AudioContext | null>(null);
+
+  function concatChunks(chunks: Uint8Array[]) {
+    const total = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
+    const merged = new Uint8Array(total);
+    let offset = 0;
+    for (const chunk of chunks) {
+      merged.set(chunk, offset);
+      offset += chunk.length;
+    }
+    return merged;
+  }
+
+  async function playPcm16(bytes: Uint8Array, sampleRate: number, channels: number) {
+    const audioContext =
+      audioContextRef.current ?? new AudioContext();
+    audioContextRef.current = audioContext;
+    if (audioContext.state === 'suspended') {
+      await audioContext.resume();
+    }
+    const sampleCount = bytes.length / 2 / channels;
+    const audioBuffer = audioContext.createBuffer(channels, sampleCount, sampleRate);
+    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    for (let i = 0; i < sampleCount; i++) {
+      for (let ch = 0; ch < channels; ch++) {
+        const byteOffset = (i * channels + ch) * 2;
+        const sample = view.getInt16(byteOffset, true); // little-endian PCM16
+        audioBuffer.getChannelData(ch)[i] = sample / 32768;
+      }
+    }
+    const source = audioContext.createBufferSource();
+    source.buffer = audioBuffer;
+    source.connect(audioContext.destination);
+    source.start();
+  }
 
   function handleOpenDataChannelInterruption(dc: RTCDataChannel, pendingStopSignalRef: { current: boolean }) {
     // check if there is a pending stop signal
@@ -33,14 +72,31 @@ function Panel() {
     }
   }
 
-  function handleMessageFromAgent(event: MessageEvent) {
+  async function handleMessageFromAgent(event: MessageEvent) {
     console.log('Message from agent:', event.data);
     try{
-      const agentmetadata = JSON.parse(event.data as string);
-      if (agentmetadata.first_chunk){
-        setAgentMessage(agentmetadata.message);
-      } else {
-        setAgentMessage((prev) => prev + agentmetadata.message);
+      if (typeof event.data === 'string') {
+        const agentmetadata = JSON.parse(event.data);
+        if (agentmetadata.type === 'audio_start'){
+          sampleRate.current = agentmetadata.sample_rate ?? null;
+          channels.current = agentmetadata.channels ?? null;
+          sampleWidth.current = agentmetadata.sample_width ?? null;
+          audioChunksRef.current = [];
+        } else if (agentmetadata.type === 'audio_end'){
+          const merged = concatChunks(audioChunksRef.current);
+          audioChunksRef.current = [];
+          if (sampleRate.current && channels.current && sampleWidth.current === 2) {
+            await playPcm16(merged, sampleRate.current, channels.current);
+          } else {
+            console.log('Unsupported audio metadata', {
+              sampleRate: sampleRate.current,
+              channels: channels.current,
+              sampleWidth: sampleWidth.current,
+            });
+          }
+        }
+      }else{
+        audioChunksRef.current.push(new Uint8Array(event.data));
       }
     } catch(error) {
       console.log("Error parsing message from agent", error);
