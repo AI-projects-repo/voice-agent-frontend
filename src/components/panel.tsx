@@ -19,7 +19,6 @@ function Panel() {
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const dcRef = useRef<RTCDataChannel | null>(null);
   const pendingStopSignalRef = useRef(false);
-  const [agentMessage, setAgentMessage] = useState('');
   const sampleRate = useRef<number | null>(null);
   const channels = useRef<number | null>(null);
   const sampleWidth = useRef<number | null>(null);
@@ -233,11 +232,6 @@ function Panel() {
         </button>
       </div>
       <p className="panel-status">{status}</p>
-      { agentMessage && (
-        <div>
-          <textarea id="agent-message" disabled value={agentMessage} readOnly /> 
-        </div>
-      )}
     </div>
   );
 }
