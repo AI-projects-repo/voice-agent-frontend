@@ -1,0 +1,13 @@
+services:
+  rtc-audio-client:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - 81:80
+    networks:
+      - agent-network
+
+networks:
+  agent-network:
+    external: true
